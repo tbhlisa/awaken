@@ -129,6 +129,43 @@ button.listening .mic-dot { background: #d9534f; animation: pulse 1.2s ease-in-o
 .done h2 { font-family: var(--display); font-weight: 400; font-size: 1.9rem; margin: 0; }
 .done p { margin: 0; color: var(--ink-soft); }
 .timer { font-family: var(--display); font-size: 3rem; font-variant-numeric: tabular-nums; }
+.done h2.big { font-size: clamp(2rem, 9vw, 2.6rem); line-height: 1.15; text-wrap: balance; }
+.settle { margin-top: 10px; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.choice {
+  border-radius: 18px; padding: 18px 12px; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  font-weight: 600;
+}
+.swatch { width: 54px; height: 54px; display: block; }
+.slime-swatch { border-radius: 46% 54% 50% 50% / 58% 48% 52% 42%; background: radial-gradient(circle at 35% 30%, #fff 0 8%, #c7b3ff 22%, #8f7ae6 80%); }
+.wrap-swatch {
+  border-radius: 10px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9) 0 10%, rgba(255,255,255,0.25) 25%, rgba(255,255,255,0.08) 60%) 0 0 / 27px 27px;
+  border: 1px solid var(--glass-line);
+}
+button.center { align-self: center; }
+
+.play { gap: 14px; }
+.play-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.left-count { font-size: 0.85rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+#slime { width: 100%; height: min(58vh, 420px); display: block; touch-action: none; cursor: grab; border-radius: 16px; background: rgba(0,0,0,0.12); }
+
+.wrap {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+  padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.06);
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.bubble {
+  aspect-ratio: 1; max-width: 100%; border-radius: 50%; padding: 0; border: 1px solid rgba(255,255,255,0.35);
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.95) 0 9%, rgba(255,255,255,0.35) 22%, rgba(255,255,255,0.10) 62%, rgba(255,255,255,0.18) 100%);
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.12);
+  transition: transform 0.12s ease;
+}
+.bubble:active { transform: scale(0.92); }
+.bubble.popped {
+  background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.25); transform: scale(0.86);
+}
 
 footer { margin-top: auto; display: flex; justify-content: center; }
 
@@ -170,8 +207,33 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   </section>
 
   <section class="card done" id="doneCard" hidden>
-    <h2>You're ready.</h2>
+    <h2 class="big">Don't scroll.<br>Start your day.</h2>
     <p id="doneText">Take a slow breath. One small thing at a time today.</p>
+    <p class="label settle">Mind still buzzing? Settle it for a minute</p>
+    <div class="choices">
+      <button type="button" class="choice" id="slimeBtn"><span class="swatch slime-swatch" aria-hidden="true"></span>Play with slime</button>
+      <button type="button" class="choice" id="wrapBtn"><span class="swatch wrap-swatch" aria-hidden="true"></span>Pop bubble wrap</button>
+    </div>
+  </section>
+
+  <section class="card play" id="slimeCard" hidden>
+    <div class="play-head">
+      <p class="label">Slime</p>
+      <button type="button" class="quiet" id="slimeColorBtn">Change colour</button>
+    </div>
+    <canvas id="slime" aria-label="Squishy slime. Press, poke and stretch it."></canvas>
+    <p class="hint">Press, poke and stretch it</p>
+    <button type="button" class="primary center" data-back>I'm ready to go</button>
+  </section>
+
+  <section class="card play" id="wrapCard" hidden>
+    <div class="play-head">
+      <p class="label">Bubble wrap</p>
+      <span class="left-count" id="wrapCount"></span>
+    </div>
+    <div class="wrap" id="wrap" role="group" aria-label="Bubble wrap"></div>
+    <button type="button" class="quiet center" id="wrapNew" hidden>New sheet</button>
+    <button type="button" class="primary center" data-back>I'm ready to go</button>
   </section>
 
   <section class="card done" id="snoozeCard" hidden>
@@ -243,9 +305,12 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   }
   renderStreak();
 
-  // Pick today's affirmation (same one all day, changes daily)
+  // Pick a new affirmation every time the page opens (never the same as last time)
   const dayNum = Math.floor(new Date(todayKey).getTime() / 86400000);
-  let idx = dayNum % AFFIRMATIONS.length;
+  const lastIdx = store.get("lastAffirmation", -1);
+  let idx = Math.floor(Math.random() * (AFFIRMATIONS.length - 1));
+  if (idx >= lastIdx && lastIdx >= 0) idx++;
+  store.set("lastAffirmation", idx);
 
   const norm = (s) => s.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
   let targetWords = [];
@@ -370,7 +435,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   function stopListening() { if (rec && listening) { try { rec.stop(); } catch (e) {} } }
 
   $("micBtn").addEventListener("click", () => (listening ? stopListening() : startListening()));
-  $("otherBtn").addEventListener("click", () => { idx = (idx + 1) % AFFIRMATIONS.length; showAffirmation(); });
+  $("otherBtn").addEventListener("click", () => { idx = (idx + 1) % AFFIRMATIONS.length; store.set("lastAffirmation", idx); showAffirmation(); });
   $("manualBtn").addEventListener("click", unlock);
 
   // Calm chime (soft bell tones generated in the browser)
@@ -464,6 +529,208 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     $("snoozeCard").hidden = true; $("sayCard").hidden = false; $("swipe").hidden = false;
     thumb.classList.add("snap"); setThumb(0);
   });
+
+  // ---------- Settle: slime and bubble wrap ----------
+  function openPlay(id) {
+    $("doneCard").hidden = true;
+    $(id).hidden = false;
+    window.scrollTo(0, 0);
+    if (id === "slimeCard") startSlime();
+    if (id === "wrapCard" && !$("wrap").children.length) newSheet();
+  }
+  function closePlay() {
+    $("slimeCard").hidden = true; $("wrapCard").hidden = true;
+    stopSlime();
+    $("doneCard").hidden = false;
+  }
+  $("slimeBtn").addEventListener("click", () => openPlay("slimeCard"));
+  $("wrapBtn").addEventListener("click", () => openPlay("wrapCard"));
+  document.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", closePlay));
+
+  // Slime: a soft ring of points that springs back after you press or stretch it
+  const SLIME_COLOURS = [
+    ["#e9e1ff", "#b9a4ff", "#7c63db"],
+    ["#ffe6ef", "#ffb3cb", "#e07399"],
+    ["#e2fbf0", "#a6ecd0", "#4fbf96"],
+    ["#fff3dc", "#ffd59a", "#e6a04e"],
+    ["#e2f1ff", "#a9d3ff", "#5a9ae6"]
+  ];
+  let colourIdx = 0;
+  $("slimeColorBtn").addEventListener("click", () => { colourIdx = (colourIdx + 1) % SLIME_COLOURS.length; wobble(6); });
+
+  const canvas = $("slime"), g2 = canvas.getContext("2d");
+  const N = 64;
+  const pts = Array.from({ length: N }, () => ({ d: 0, v: 0 }));
+  const slime = { cx: 0, cy: 0, vx: 0, vy: 0, R: 100, w: 0, h: 0 };
+  let pointer = null, raf = null, t0 = 0;
+
+  function sizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+    g2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    slime.w = r.width; slime.h = r.height;
+    slime.R = Math.min(r.width, r.height) * 0.3;
+    slime.cx = r.width / 2; slime.cy = r.height / 2;
+  }
+  function wobble(amount) { pts.forEach((p, i) => { p.v += Math.sin(i * 0.9) * amount; }); }
+  function angleDiff(a, b) { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
+
+  function stepSlime() {
+    const R = slime.R;
+    if (pointer) {
+      const dx = pointer.x - slime.cx, dy = pointer.y - slime.cy;
+      const phi = Math.atan2(dy, dx), rho = Math.hypot(dx, dy);
+      const reach = Math.min(rho, R * 2.1);
+      for (let i = 0; i < N; i++) {
+        const th = (i / N) * Math.PI * 2;
+        const ad = angleDiff(th, phi);
+        const w = Math.exp(-(ad * ad) / (2 * 0.32 * 0.32));
+        let target;
+        if (pointer.inside) target = pointer.dragged ? reach - R : Math.min(0, rho - R + 6);
+        else target = rho < R * 2.1 ? Math.min(0, rho - R) : 0;
+        pts[i].v += (target - pts[i].d) * w * 0.18;
+      }
+      // body leans gently toward the finger
+      slime.vx += (dx * 0.02) * (pointer.inside ? 0.12 : 0);
+      slime.vy += (dy * 0.02) * (pointer.inside ? 0.12 : 0);
+    }
+    for (let i = 0; i < N; i++) {
+      const p = pts[i], a = pts[(i + N - 1) % N], b = pts[(i + 1) % N];
+      p.v += -p.d * 0.035 + (a.d + b.d - 2 * p.d) * 0.22;
+    }
+    for (const p of pts) { p.v *= 0.9; p.d += p.v; p.d = Math.max(-R * 0.85, Math.min(R * 1.4, p.d)); }
+    slime.vx += (slime.w / 2 - slime.cx) * 0.02; slime.vy += (slime.h / 2 - slime.cy) * 0.02;
+    slime.vx *= 0.85; slime.vy *= 0.85;
+    slime.cx += slime.vx; slime.cy += slime.vy;
+  }
+
+  function drawSlime(time) {
+    const { cx, cy, R } = slime;
+    const [light, mid, deep] = SLIME_COLOURS[colourIdx];
+    g2.clearRect(0, 0, slime.w, slime.h);
+    const breathe = 1 + Math.sin(time / 900) * 0.012;
+    const xy = pts.map((p, i) => {
+      const th = (i / N) * Math.PI * 2;
+      const r = (R + p.d) * breathe;
+      return [cx + Math.cos(th) * r, cy + Math.sin(th) * r * 0.92];
+    });
+    g2.beginPath();
+    for (let i = 0; i < N; i++) {
+      const p = xy[i], q = xy[(i + 1) % N];
+      const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      if (i === 0) g2.moveTo(mx, my); else g2.quadraticCurveTo(p[0], p[1], mx, my);
+    }
+    const p0 = xy[0], p1 = xy[1];
+    g2.quadraticCurveTo(p0[0], p0[1], (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2);
+    g2.closePath();
+    const grad = g2.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.1, cx, cy, R * 1.5);
+    grad.addColorStop(0, light); grad.addColorStop(0.45, mid); grad.addColorStop(1, deep);
+    g2.save();
+    g2.shadowColor = "rgba(0,0,0,0.28)"; g2.shadowBlur = 24; g2.shadowOffsetY = 10;
+    g2.fillStyle = grad; g2.fill();
+    g2.restore();
+    // glossy highlights
+    g2.fillStyle = "rgba(255,255,255,0.55)";
+    g2.beginPath(); g2.ellipse(cx - R * 0.38, cy - R * 0.42, R * 0.2, R * 0.1, -0.6, 0, Math.PI * 2); g2.fill();
+    g2.fillStyle = "rgba(255,255,255,0.35)";
+    g2.beginPath(); g2.arc(cx - R * 0.12, cy - R * 0.55, R * 0.05, 0, Math.PI * 2); g2.fill();
+    g2.beginPath(); g2.arc(cx + R * 0.3, cy + R * 0.25, R * 0.035, 0, Math.PI * 2); g2.fill();
+  }
+  function loop(time) { stepSlime(); drawSlime(time); raf = requestAnimationFrame(loop); }
+  function startSlime() {
+    sizeCanvas();
+    pts.forEach((p) => { p.d = 0; p.v = 0; });
+    wobble(4);
+    if (!raf) raf = requestAnimationFrame(loop);
+  }
+  function stopSlime() { if (raf) cancelAnimationFrame(raf); raf = null; pointer = null; }
+  window.addEventListener("resize", () => { if (raf) sizeCanvas(); });
+
+  function localPoint(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  canvas.addEventListener("pointerdown", (e) => {
+    const p = localPoint(e);
+    const inside = Math.hypot(p.x - slime.cx, p.y - slime.cy) < slime.R * 1.1;
+    pointer = { ...p, inside, dragged: false, sx: p.x, sy: p.y };
+    canvas.setPointerCapture(e.pointerId);
+    squish();
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!pointer) return;
+    const p = localPoint(e);
+    pointer.x = p.x; pointer.y = p.y;
+    if (Math.hypot(p.x - pointer.sx, p.y - pointer.sy) > 12) pointer.dragged = true;
+  });
+  function release() { if (pointer) { wobble(pointer.dragged ? 3 : 5); squish(0.6); } pointer = null; }
+  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointercancel", release);
+
+  function squish(vol) {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+      const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(180 + Math.random() * 60, t);
+      o.frequency.exponentialRampToValueAtTime(70, t + 0.22);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12 * (vol || 1), t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.3);
+    } catch (e) {}
+  }
+
+  // Bubble wrap: tap or drag your finger across to pop
+  const ROWS = 8, COLS = 6;
+  let left = 0, popping = false;
+  function newSheet() {
+    const wrap = $("wrap");
+    wrap.innerHTML = "";
+    for (let i = 0; i < ROWS * COLS; i++) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "bubble"; b.setAttribute("aria-label", "Bubble");
+      wrap.appendChild(b);
+    }
+    left = ROWS * COLS;
+    updateCount();
+    $("wrapNew").hidden = true;
+  }
+  function updateCount() { $("wrapCount").textContent = left ? left + " left" : "All popped"; }
+  function pop(b) {
+    if (!b || !b.classList.contains("bubble") || b.classList.contains("popped")) return;
+    b.classList.add("popped");
+    b.setAttribute("aria-label", "Popped bubble");
+    left--;
+    updateCount();
+    popSound();
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
+    if (!left) $("wrapNew").hidden = false;
+  }
+  $("wrap").addEventListener("pointerdown", (e) => { popping = true; pop(e.target.closest(".bubble")); });
+  $("wrap").addEventListener("pointermove", (e) => {
+    if (!popping) return;
+    pop(document.elementFromPoint(e.clientX, e.clientY)?.closest(".bubble"));
+  });
+  window.addEventListener("pointerup", () => { popping = false; });
+  window.addEventListener("pointercancel", () => { popping = false; });
+  $("wrap").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pop(e.target.closest(".bubble")); } });
+  $("wrapNew").addEventListener("click", newSheet);
+
+  function popSound() {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+      const t = ctx.currentTime, len = Math.floor(ctx.sampleRate * 0.06);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate), data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 4);
+      const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = buf;
+      bp.type = "bandpass"; bp.frequency.value = 1400 + Math.random() * 900; bp.Q.value = 1.2;
+      g.gain.value = 0.9;
+      src.connect(bp).connect(g).connect(ctx.destination);
+      src.start(t);
+    } catch (e) {}
+  }
 
   showAffirmation();
 })();
