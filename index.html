@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Awaken">
+<meta name="theme-color" content="#1d2340">
+<title>Awaken</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one calm screen, a dawn sky that warms as you move from listening to ready. */
+:root {
+  --sky-top: #1d2340;
+  --sky-mid: #4a4a78;
+  --sky-low: #c9928a;
+  --sun: #f3c89b;
+  --ink: #f6efe9;
+  --ink-soft: rgba(246, 239, 233, 0.72);
+  --ink-faint: rgba(246, 239, 233, 0.38);
+  --glass: rgba(255, 255, 255, 0.10);
+  --glass-line: rgba(255, 255, 255, 0.22);
+  --said: #ffe2b8;
+  --ok: #bfe3c6;
+  --display: "Young Serif", Georgia, "Times New Roman", serif;
+  --body: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--body);
+  color: var(--ink);
+  background: var(--sky-top);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+.sky {
+  position: fixed; inset: 0; z-index: -1;
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-low) 100%);
+  transition: filter 2.5s ease;
+}
+.sky::after {
+  content: ""; position: absolute; left: 50%; bottom: -38vmax;
+  width: 70vmax; height: 70vmax; transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--sun) 0%, rgba(243,200,155,0.35) 35%, rgba(243,200,155,0) 70%);
+  transition: bottom 3s ease;
+}
+body.ready .sky::after { bottom: -26vmax; }
+body.ready .sky { filter: brightness(1.12) saturate(1.1); }
+
+main {
+  min-height: 100%;
+  max-width: 34rem; margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: calc(env(safe-area-inset-top, 0px) + 28px) calc(env(safe-area-inset-bottom, 0px) + 28px);
+  display: flex; flex-direction: column; gap: 28px;
+}
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.greet { font-family: var(--display); font-size: 1.5rem; margin: 0; }
+.date { color: var(--ink-soft); font-size: 0.95rem; }
+.streak { font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+
+.card {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 22px;
+  padding: 26px 22px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  display: flex; flex-direction: column; gap: 18px;
+}
+.label { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0; }
+.affirmation {
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 6.5vw, 2.2rem);
+  line-height: 1.3; margin: 0; text-wrap: balance;
+}
+.affirmation .w { color: var(--ink-faint); transition: color 0.35s ease; }
+.affirmation .w.said { color: var(--said); }
+body.ready .affirmation .w { color: var(--said); }
+
+.heard { min-height: 1.4em; color: var(--ink-soft); font-size: 0.95rem; margin: 0; font-style: italic; }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+button {
+  font: inherit; color: var(--ink); cursor: pointer;
+  border-radius: 999px; border: 1px solid var(--glass-line);
+  background: var(--glass); padding: 12px 18px; font-size: 0.95rem;
+}
+button:focus-visible, .thumb:focus-visible { outline: 2px solid var(--said); outline-offset: 3px; }
+button.primary {
+  background: var(--ink); color: var(--sky-top); border-color: transparent; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px;
+}
+button.quiet { background: transparent; border-color: transparent; color: var(--ink-soft); padding-inline: 8px; text-decoration: underline; text-underline-offset: 3px; }
+.mic-dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+button.listening .mic-dot { background: #d9534f; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(1.6); opacity: 0.6; } }
+
+.status { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+.status.ok { color: var(--ok); }
+
+/* Swipe track */
+.swipe { display: flex; flex-direction: column; gap: 10px; }
+.track {
+  position: relative; height: 64px; border-radius: 999px;
+  background: rgba(0,0,0,0.18); border: 1px solid var(--glass-line);
+  display: flex; align-items: center; justify-content: space-between;
+  padding-inline: 22px; user-select: none; -webkit-user-select: none; touch-action: none;
+}
+.track span { font-size: 0.85rem; color: var(--ink-soft); pointer-events: none; }
+.track span.right { color: var(--ink); font-weight: 600; }
+.thumb {
+  position: absolute; top: 6px; left: 50%; width: 52px; height: 52px; margin-left: -26px;
+  border-radius: 50%; background: var(--ink); color: var(--sky-top);
+  display: grid; place-items: center; font-size: 1.2rem; cursor: grab;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+}
+.thumb.snap { transition: transform 0.3s ease; }
+.locked .track { opacity: 0.4; }
+.locked .thumb { cursor: not-allowed; }
+.hint { font-size: 0.8rem; color: var(--ink-faint); text-align: center; margin: 0; }
+
+.done { text-align: center; gap: 14px; }
+.done h2 { font-family: var(--display); font-weight: 400; font-size: 1.9rem; margin: 0; }
+.done p { margin: 0; color: var(--ink-soft); }
+.timer { font-family: var(--display); font-size: 3rem; font-variant-numeric: tabular-nums; }
+
+footer { margin-top: auto; display: flex; justify-content: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .sky, .sky::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"></div>
+<main>
+  <header>
+    <div>
+      <p class="greet" id="greet">Good morning</p>
+      <div class="date" id="date"></div>
+    </div>
+    <div class="streak" id="streak"></div>
+  </header>
+
+  <section class="card" id="sayCard">
+    <p class="label">Say this out loud</p>
+    <p class="affirmation" id="affirmation" aria-live="polite"></p>
+    <p class="heard" id="heard"></p>
+    <div class="row">
+      <button class="primary" id="micBtn" type="button"><span class="mic-dot"></span><span id="micLabel">Tap and say it</span></button>
+      <button class="quiet" id="otherBtn" type="button">Show a different one</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <button class="quiet" id="manualBtn" type="button" hidden>I said it out loud</button>
+  </section>
+
+  <section class="swipe locked" id="swipe">
+    <div class="track" id="track">
+      <span>← 5 more minutes</span>
+      <span class="right">Start my day →</span>
+      <div class="thumb" id="thumb" tabindex="0" role="slider" aria-label="Swipe left to rest 5 more minutes, right to start your day" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">☀</div>
+    </div>
+    <p class="hint" id="swipeHint">Say your affirmation to unlock</p>
+  </section>
+
+  <section class="card done" id="doneCard" hidden>
+    <h2>You're ready.</h2>
+    <p id="doneText">Take a slow breath. One small thing at a time today.</p>
+  </section>
+
+  <section class="card done" id="snoozeCard" hidden>
+    <p class="label">Resting</p>
+    <div class="timer" id="timer">5:00</div>
+    <p>Keep this page open. A soft chime will play when it's time.</p>
+    <div class="row" style="justify-content:center">
+      <button type="button" id="wakeNowBtn">I'm up now</button>
+    </div>
+  </section>
+
+  <footer>
+    <button class="quiet" id="chimeBtn" type="button">Play a calm chime</button>
+  </footer>
+</main>
+
+<script>
+(function () {
+  const AFFIRMATIONS = [
+    "Today is going to be a great day.",
+    "Today I am ready to take on any challenge.",
+    "Today is an exciting day for new opportunities.",
+    "I am calm, I am safe, and I am ready.",
+    "I can take today one step at a time.",
+    "I welcome this morning with an open heart.",
+    "I have everything I need to handle today.",
+    "My breath is slow and my mind is clear.",
+    "I am proud of how far I have come.",
+    "Good things are on their way to me today.",
+    "I choose peace over worry this morning.",
+    "I trust myself to make good choices today.",
+    "I am allowed to start slowly.",
+    "Today I will be kind to myself.",
+    "I am stronger than my worries.",
+    "This day is a fresh start.",
+    "I am grateful to wake up today.",
+    "I believe in myself and my abilities.",
+    "I let go of what I cannot control.",
+    "I bring calm energy into everything I do today."
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  // Greeting and date
+  const now = new Date();
+  const h = now.getHours();
+  $("greet").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  $("date").textContent = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+  // Streak
+  const todayKey = now.toISOString().slice(0, 10);
+  function renderStreak() {
+    const s = store.get("streak", { count: 0, last: null });
+    $("streak").textContent = s.count > 0 ? s.count + (s.count === 1 ? " morning" : " mornings") + " in a row" : "";
+  }
+  function bumpStreak() {
+    const s = store.get("streak", { count: 0, last: null });
+    if (s.last === todayKey) return;
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    const yKey = y.toISOString().slice(0, 10);
+    s.count = s.last === yKey ? s.count + 1 : 1;
+    s.last = todayKey;
+    store.set("streak", s);
+    renderStreak();
+  }
+  renderStreak();
+
+  // Pick today's affirmation (same one all day, changes daily)
+  const dayNum = Math.floor(new Date(todayKey).getTime() / 86400000);
+  let idx = dayNum % AFFIRMATIONS.length;
+
+  const norm = (s) => s.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  let targetWords = [];
+  let unlocked = false;
+
+  function showAffirmation() {
+    const text = AFFIRMATIONS[idx];
+    const el = $("affirmation");
+    el.innerHTML = "";
+    text.split(" ").forEach((w, i) => {
+      const span = document.createElement("span");
+      span.className = "w";
+      span.textContent = w;
+      el.appendChild(span);
+      if (i < text.split(" ").length - 1) el.appendChild(document.createTextNode(" "));
+    });
+    targetWords = norm(text);
+    $("heard").textContent = "";
+    setStatus("");
+  }
+
+  // Fuzzy word match: allows small mishearings
+  function editDistance(a, b) {
+    const dp = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++)
+      for (let j = 1; j <= b.length; j++)
+        dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    return dp[a.length][b.length];
+  }
+  function wordsClose(a, b) {
+    if (a === b) return true;
+    const allowed = a.length <= 3 ? 0 : a.length <= 6 ? 1 : 2;
+    return editDistance(a, b) <= allowed;
+  }
+  function scoreSpoken(spokenText) {
+    const heard = norm(spokenText);
+    const matched = targetWords.map((w) => heard.some((hw) => wordsClose(w, hw)));
+    const spans = $("affirmation").querySelectorAll(".w");
+    spans.forEach((s, i) => s.classList.toggle("said", !!matched[i]));
+    const ratio = matched.filter(Boolean).length / targetWords.length;
+    return ratio;
+  }
+
+  function setStatus(msg, ok) {
+    const s = $("status");
+    s.textContent = msg;
+    s.classList.toggle("ok", !!ok);
+  }
+
+  function unlock() {
+    if (unlocked) return;
+    unlocked = true;
+    document.body.classList.add("ready");
+    $("swipe").classList.remove("locked");
+    $("swipeHint").textContent = "Swipe when you're ready";
+    setStatus("Beautifully said.", true);
+    $("micBtn").hidden = true;
+    $("otherBtn").hidden = true;
+    $("manualBtn").hidden = true;
+    playChime(0.5);
+  }
+
+  // Speech recognition
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, listening = false;
+
+  if (!SR) {
+    $("manualBtn").hidden = false;
+    setStatus("This browser can't listen. Say it out loud, then tap below.");
+    $("micBtn").disabled = true;
+    $("micBtn").style.opacity = 0.5;
+  }
+
+  function startListening() {
+    if (!SR || listening) return;
+    rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 3;
+    let best = 0;
+    rec.onresult = (e) => {
+      let text = "";
+      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript + " ";
+      $("heard").textContent = "“" + text.trim() + "”";
+      // Check every alternative of the latest result too
+      const last = e.results[e.results.length - 1];
+      for (let a = 0; a < last.length; a++) best = Math.max(best, scoreSpoken(text.replace(last[0].transcript, last[a].transcript)));
+      best = Math.max(best, scoreSpoken(text));
+      if (best >= 0.8) { stopListening(); unlock(); }
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        setStatus("Microphone access is off. Allow it in your browser settings, or tap below after saying it.");
+        $("manualBtn").hidden = false;
+      } else if (e.error === "no-speech") {
+        setStatus("I didn't hear anything. Tap and try again.");
+      } else {
+        setStatus("Something interrupted listening. Tap and try again.");
+      }
+    };
+    rec.onend = () => {
+      listening = false;
+      $("micBtn").classList.remove("listening");
+      $("micLabel").textContent = "Tap and say it";
+      if (!unlocked && best > 0 && best < 0.8) {
+        setStatus("Almost. Say the whole line once more.");
+        $("manualBtn").hidden = false;
+      }
+    };
+    try {
+      rec.start();
+      listening = true;
+      $("micBtn").classList.add("listening");
+      $("micLabel").textContent = "Listening…";
+      setStatus("");
+    } catch (err) {
+      setStatus("Couldn't start the microphone. Tap and try again.");
+    }
+  }
+  function stopListening() { if (rec && listening) { try { rec.stop(); } catch (e) {} } }
+
+  $("micBtn").addEventListener("click", () => (listening ? stopListening() : startListening()));
+  $("otherBtn").addEventListener("click", () => { idx = (idx + 1) % AFFIRMATIONS.length; showAffirmation(); });
+  $("manualBtn").addEventListener("click", unlock);
+
+  // Calm chime (soft bell tones generated in the browser)
+  let ctx = null;
+  function playChime(volume) {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((f, i) => {
+        const t = ctx.currentTime + i * 0.45;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.18 * (volume || 1), t + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+        o.connect(g).connect(ctx.destination);
+        o.start(t); o.stop(t + 2.7);
+      });
+    } catch (e) {}
+  }
+  $("chimeBtn").addEventListener("click", () => playChime(1));
+
+  // Swipe control
+  const track = $("track"), thumb = $("thumb");
+  let dragging = false, startX = 0, dx = 0;
+  function maxTravel() { return track.clientWidth / 2 - 32; }
+  function setThumb(x) {
+    dx = Math.max(-maxTravel(), Math.min(maxTravel(), x));
+    thumb.style.transform = "translateX(" + dx + "px)";
+  }
+  function release() {
+    const m = maxTravel();
+    thumb.classList.add("snap");
+    if (dx > m * 0.75) { setThumb(m); setTimeout(startDay, 250); }
+    else if (dx < -m * 0.75) { setThumb(-m); setTimeout(snooze, 250); }
+    else setThumb(0);
+  }
+  thumb.addEventListener("pointerdown", (e) => {
+    if (!unlocked) { $("swipeHint").textContent = "Say your affirmation first"; return; }
+    dragging = true; startX = e.clientX - dx; thumb.classList.remove("snap");
+    thumb.setPointerCapture(e.pointerId);
+  });
+  thumb.addEventListener("pointermove", (e) => { if (dragging) setThumb(e.clientX - startX); });
+  thumb.addEventListener("pointerup", () => { if (dragging) { dragging = false; release(); } });
+  thumb.addEventListener("pointercancel", () => { dragging = false; thumb.classList.add("snap"); setThumb(0); });
+  thumb.addEventListener("keydown", (e) => {
+    if (!unlocked) return;
+    if (e.key === "ArrowRight") { thumb.classList.add("snap"); setThumb(maxTravel()); setTimeout(startDay, 250); }
+    if (e.key === "ArrowLeft") { thumb.classList.add("snap"); setThumb(-maxTravel()); setTimeout(snooze, 250); }
+  });
+
+  const CLOSERS = [
+    "Take a slow breath. One small thing at a time today.",
+    "Drink some water and let the light in.",
+    "You don't have to do everything. Just the next thing.",
+    "Stretch your shoulders and unclench your jaw."
+  ];
+  function startDay() {
+    clearInterval(snoozeTimer);
+    bumpStreak();
+    $("sayCard").hidden = true; $("swipe").hidden = true; $("snoozeCard").hidden = true;
+    $("doneText").textContent = CLOSERS[dayNum % CLOSERS.length];
+    $("doneCard").hidden = false;
+  }
+
+  let snoozeTimer = null, wakeLock = null;
+  async function snooze() {
+    $("sayCard").hidden = true; $("swipe").hidden = true;
+    $("snoozeCard").hidden = false;
+    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+    const end = Date.now() + 5 * 60 * 1000;
+    const tick = () => {
+      const left = Math.max(0, end - Date.now());
+      const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
+      $("timer").textContent = m + ":" + String(s).padStart(2, "0");
+      if (left <= 0) {
+        clearInterval(snoozeTimer);
+        playChime(1); setTimeout(() => playChime(1), 3000);
+        $("snoozeCard").hidden = true; $("swipe").hidden = false;
+        $("sayCard").hidden = false;
+        thumb.classList.add("snap"); setThumb(0);
+        if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+      }
+    };
+    tick();
+    snoozeTimer = setInterval(tick, 1000);
+  }
+  $("wakeNowBtn").addEventListener("click", () => {
+    clearInterval(snoozeTimer);
+    $("snoozeCard").hidden = true; $("sayCard").hidden = false; $("swipe").hidden = false;
+    thumb.classList.add("snap"); setThumb(0);
+  });
+
+  showAffirmation();
+})();
+</script>
+</body>
+</html>
