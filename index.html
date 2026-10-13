@@ -477,7 +477,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   thumb.addEventListener("pointerdown", (e) => {
     if (!unlocked) { $("swipeHint").textContent = "Say your affirmation first"; return; }
     dragging = true; startX = e.clientX - dx; thumb.classList.remove("snap");
-    thumb.setPointerCapture(e.pointerId);
+    try { thumb.setPointerCapture(e.pointerId); } catch (err) {}
   });
   thumb.addEventListener("pointermove", (e) => { if (dragging) setThumb(e.clientX - startX); });
   thumb.addEventListener("pointerup", () => { if (dragging) { dragging = false; release(); } });
@@ -652,7 +652,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     const p = localPoint(e);
     const inside = Math.hypot(p.x - slime.cx, p.y - slime.cy) < slime.R * 1.1;
     pointer = { ...p, inside, dragged: false, sx: p.x, sy: p.y };
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     squish();
   });
   canvas.addEventListener("pointermove", (e) => {
@@ -661,9 +661,9 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     pointer.x = p.x; pointer.y = p.y;
     if (Math.hypot(p.x - pointer.sx, p.y - pointer.sy) > 12) pointer.dragged = true;
   });
-  function release() { if (pointer) { wobble(pointer.dragged ? 3 : 5); squish(0.6); } pointer = null; }
-  canvas.addEventListener("pointerup", release);
-  canvas.addEventListener("pointercancel", release);
+  function releaseSlime() { if (pointer) { wobble(pointer.dragged ? 3 : 5); squish(0.6); } pointer = null; }
+  canvas.addEventListener("pointerup", releaseSlime);
+  canvas.addEventListener("pointercancel", releaseSlime);
 
   function squish(vol) {
     try {
