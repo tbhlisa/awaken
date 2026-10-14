@@ -82,6 +82,9 @@ header { display: flex; justify-content: space-between; align-items: baseline; g
 .affirmation .w { color: var(--ink-faint); transition: color 0.35s ease; }
 .affirmation .w.said { color: var(--said); }
 body.ready .affirmation .w { color: var(--said); }
+body.ready #closeLine .w { color: var(--ink-faint); }
+body.ready #closeLine .w.said { color: var(--said); }
+#closeCard, #byeCard { animation: rise 0.6s ease both; }
 
 .heard { min-height: 1.4em; color: var(--ink-soft); font-size: 0.95rem; margin: 0; font-style: italic; }
 
@@ -279,6 +282,22 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     <div class="wrap" id="wrap" role="group" aria-label="Bubble wrap"></div>
     <button type="button" class="quiet center" id="wrapNew" hidden>New sheet</button>
     <button type="button" class="primary center" data-back>I'm ready to go</button>
+  </section>
+
+  <section class="card" id="closeCard" hidden>
+    <p class="label">One last thing · say it out loud</p>
+    <p class="affirmation" id="closeLine" aria-live="polite"></p>
+    <p class="heard" id="closeHeard"></p>
+    <div class="row">
+      <button class="primary" id="closeMic" type="button"><span class="mic-dot"></span><span id="closeMicLabel">Tap and say it</span></button>
+    </div>
+    <p class="status" id="closeStatus" role="status"></p>
+    <button class="quiet" id="closeManual" type="button" hidden>I said it out loud</button>
+  </section>
+
+  <section class="card done" id="byeCard" hidden>
+    <h2 class="big">Have a great day.</h2>
+    <p>You're ready. See you tomorrow morning.</p>
   </section>
 
   <section class="card done" id="snoozeCard" hidden>
@@ -710,8 +729,81 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   function closePlay() {
     $("slimeCard").hidden = true; $("wrapCard").hidden = true;
     stopSlime();
-    $("doneCard").hidden = false;
+    showClosing();
   }
+
+  // ---------- Closing affirmation: "I'm going to have a great day." ----------
+  const CLOSING = "I'm going to have a great day.";
+  const closeWords = norm(CLOSING);
+  let closeDone = false, cRec = null, cListening = false;
+  (function buildClosing() {
+    const el = $("closeLine");
+    CLOSING.split(" ").forEach((w, i, a) => {
+      const span = document.createElement("span"); span.className = "w"; span.textContent = w; el.appendChild(span);
+      if (i < a.length - 1) el.appendChild(document.createTextNode(" "));
+    });
+  })();
+  function showClosing() {
+    $("doneCard").hidden = true;
+    $("closeCard").hidden = false;
+    window.scrollTo(0, 0);
+    if (!SR) { $("closeMic").disabled = true; $("closeMic").style.opacity = 0.5; $("closeManual").hidden = false; closeStatusMsg("Say it out loud, then tap below."); }
+  }
+  function closeStatusMsg(msg, ok) { const s = $("closeStatus"); s.textContent = msg; s.classList.toggle("ok", !!ok); }
+  function scoreClosing(text) {
+    // accept how people actually say it: "gonna" = "going to", "I am" = "I'm"
+    const heard = norm(text.replace(/\bgonna\b/gi, "going to").replace(/\bi am\b/gi, "I'm"));
+    const matched = closeWords.map((w) => heard.some((hw) => wordsClose(w, hw)));
+    $("closeLine").querySelectorAll(".w").forEach((s, i) => s.classList.toggle("said", !!matched[i]));
+    return matched.filter(Boolean).length / closeWords.length;
+  }
+  function finishClosing() {
+    if (closeDone) return;
+    closeDone = true;
+    $("closeLine").querySelectorAll(".w").forEach((s) => s.classList.add("said"));
+    closeStatusMsg("Beautifully said.", true);
+    $("closeMic").hidden = true; $("closeManual").hidden = true;
+    playChime(0.7);
+    setTimeout(() => { $("closeCard").hidden = true; $("byeCard").hidden = false; window.scrollTo(0, 0); }, 1800);
+  }
+  function closeListen() {
+    if (!SR || cListening || closeDone) return;
+    cRec = new SR();
+    cRec.lang = "en-US";
+    cRec.interimResults = true;
+    cRec.continuous = false;
+    cRec.maxAlternatives = 3;
+    let best = 0;
+    cRec.onresult = (e) => {
+      let text = "";
+      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript + " ";
+      $("closeHeard").textContent = "“" + text.trim() + "”";
+      best = Math.max(best, scoreClosing(text));
+      if (best >= 0.75) { try { cRec.stop(); } catch (err) {} finishClosing(); }
+    };
+    cRec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        closeStatusMsg("Microphone access is off. Say it out loud, then tap below.");
+        $("closeManual").hidden = false;
+      } else if (e.error === "no-speech") closeStatusMsg("I didn't hear anything. Tap and try again.");
+      else closeStatusMsg("Something interrupted listening. Tap and try again.");
+    };
+    cRec.onend = () => {
+      cListening = false;
+      $("closeMic").classList.remove("listening");
+      $("closeMicLabel").textContent = "Tap and say it";
+      if (!closeDone && best > 0 && best < 0.75) { closeStatusMsg("Almost. Say the whole line once more."); $("closeManual").hidden = false; }
+    };
+    try {
+      cRec.start();
+      cListening = true;
+      $("closeMic").classList.add("listening");
+      $("closeMicLabel").textContent = "Listening…";
+      closeStatusMsg("");
+    } catch (err) { closeStatusMsg("Couldn't start the microphone. Tap and try again."); }
+  }
+  $("closeMic").addEventListener("click", () => { if (cListening) { try { cRec.stop(); } catch (e) {} } else closeListen(); });
+  $("closeManual").addEventListener("click", finishClosing);
   $("slimeBtn").addEventListener("click", () => openPlay("slimeCard"));
   $("wrapBtn").addEventListener("click", () => openPlay("wrapCard"));
   document.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", closePlay));
