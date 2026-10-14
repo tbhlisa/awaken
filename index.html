@@ -606,7 +606,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   const lastQ = store.get("lastQuestion", -1);
   let qIdx = Math.floor(Math.random() * (QUESTIONS.length - 1));
   if (qIdx >= lastQ && lastQ >= 0) qIdx++;
-  let answers = [], gratShown = false, gRec = null, gListening = false;
+  let answers = [], gratShown = false, gRec = null, gListening = false, quietTries = 0;
 
   function capFirst(t) { t = t.trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
   function gratStatus(msg, ok) { const s = $("gratStatus"); s.textContent = msg; s.classList.toggle("ok", !!ok); }
@@ -632,13 +632,20 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     $("gratCard").hidden = false;
     if (!SR) { $("gratControls").hidden = true; $("gratForm").hidden = false; $("gratTypeBtn").hidden = true; }
     renderGrat();
+    gratStatus("Listening… just start speaking.");
+    autoListen(700);
+  }
+  // keep listening hands-free until three answers are in
+  function autoListen(delay) {
+    if (!SR || answers.length >= 3) return;
+    setTimeout(() => { if (!$("gratCard").hidden && !gListening && answers.length < 3) gratListen(true); }, delay);
   }
   function addAnswer(text) {
     if (answers.length >= 3 || text.trim().length < 2) return;
     answers.push(capFirst(text));
     renderGrat();
     if (answers.length === 3) finishGratitude();
-    else gratStatus(["Lovely.", "One more."][answers.length - 1]);
+    else { gratStatus(["Lovely. Now the second one…", "One more…"][answers.length - 1]); quietTries = 0; autoListen(600); }
   }
   function finishGratitude() {
     $("gratControls").hidden = true; $("gratForm").hidden = true; $("gratTypeBtn").hidden = true; $("gratUndo").hidden = true;
@@ -659,7 +666,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     $("gratRecap").hidden = false;
   }
 
-  function gratListen() {
+  function gratListen(auto) {
     if (!SR || gListening || answers.length >= 3) return;
     gRec = new SR();
     gRec.lang = "en-US";
@@ -672,30 +679,36 @@ footer { margin-top: auto; display: flex; justify-content: center; }
       heard = t.trim();
       renderGrat(heard);
     };
+    let blocked = false;
     gRec.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        gratStatus("Microphone access is off. You can type your answers instead.");
-        $("gratForm").hidden = false;
-      } else if (e.error === "no-speech") gratStatus("I didn't hear anything. Tap and try again.");
-      else gratStatus("Something interrupted listening. Tap and try again.");
+        blocked = true;
+        if (auto) gratStatus("Tap the button below and say your answer.");
+        else { gratStatus("Microphone access is off. You can type your answers instead."); $("gratForm").hidden = false; }
+      } else if (e.error === "no-speech") {
+        if (!auto || quietTries >= 2) gratStatus("I didn't hear anything. Tap and say it when you're ready.");
+      } else gratStatus("Something interrupted listening. Tap and try again.");
     };
     gRec.onend = () => {
       gListening = false;
       $("gratMic").classList.remove("listening");
-      if (heard.length >= 2) addAnswer(heard); else renderGrat();
+      if (heard.length >= 2) { addAnswer(heard); return; }
+      renderGrat();
+      // nothing heard: quietly try again a couple of times before waiting for a tap
+      if (auto && !blocked && quietTries < 2) { quietTries++; autoListen(400); }
     };
     try {
       gRec.start();
       gListening = true;
       $("gratMic").classList.add("listening");
-      gratStatus("");
+      if (!auto) gratStatus("");
       renderGrat();
-    } catch (err) { gratStatus("Couldn't start the microphone. Tap and try again."); }
+    } catch (err) { gratStatus(auto ? "Tap the button below and say your answer." : "Couldn't start the microphone. Tap and try again."); }
   }
-  $("gratMic").addEventListener("click", () => { if (gListening) { try { gRec.stop(); } catch (e) {} } else gratListen(); });
+  $("gratMic").addEventListener("click", () => { if (gListening) { try { gRec.stop(); } catch (e) {} } else { quietTries = 0; gratListen(); } });
   $("gratOther").addEventListener("click", () => { qIdx = (qIdx + 1) % QUESTIONS.length; store.set("lastQuestion", qIdx); renderGrat(); });
   $("gratTypeBtn").addEventListener("click", () => { $("gratForm").hidden = false; $("gratTypeBtn").hidden = true; $("gratInput").focus(); });
-  $("gratUndo").addEventListener("click", () => { answers.pop(); gratStatus(""); renderGrat(); });
+  $("gratUndo").addEventListener("click", () => { if (gListening) { try { gRec.abort(); } catch (e) {} } answers.pop(); quietTries = 0; gratStatus("Say it again…"); renderGrat(); autoListen(500); });
   $("gratForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gratInput").value; $("gratInput").value = ""; addAnswer(v); });
 
   // ---------- Settle: slime and bubble wrap ----------
