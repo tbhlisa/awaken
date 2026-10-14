@@ -208,7 +208,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   </header>
 
   <section class="card" id="sayCard">
-    <p class="label">Step 1 · Say this out loud</p>
+    <p class="label">Say this out loud</p>
     <p class="affirmation" id="affirmation" aria-live="polite"></p>
     <p class="heard" id="heard"></p>
     <div class="row">
@@ -242,7 +242,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     <p class="status" id="gratStatus" role="status"></p>
   </section>
 
-  <section class="swipe locked" id="swipe" hidden>
+  <section class="swipe locked" id="swipe">
     <div class="track" id="track">
       <span>← 5 more minutes</span>
       <span class="right">Start my day →</span>
@@ -628,6 +628,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     gratShown = true;
     store.set("lastQuestion", qIdx);
     $("sayCard").hidden = true;
+    $("swipe").hidden = true;
     window.scrollTo(0, 0);
     $("gratCard").hidden = false;
     if (!SR) { $("gratControls").hidden = true; $("gratForm").hidden = false; $("gratTypeBtn").hidden = true; }
