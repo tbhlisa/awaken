@@ -125,6 +125,28 @@ button.listening .mic-dot { background: #d9534f; animation: pulse 1.2s ease-in-o
 .locked .thumb { cursor: not-allowed; }
 .hint { font-size: 0.8rem; color: var(--ink-faint); text-align: center; margin: 0; }
 
+/* Gratitude */
+#gratCard { animation: rise 0.6s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.question { font-family: var(--display); font-size: clamp(1.45rem, 5.8vw, 1.9rem); line-height: 1.3; margin: 0; text-wrap: balance; }
+.grat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.grat-list li { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 10px 14px; border-radius: 16px;
+  border: 1px dashed var(--glass-line); color: var(--ink-faint); transition: background 0.3s ease, border-color 0.3s ease; }
+.grat-list .num { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  font-size: 0.85rem; font-weight: 600; background: rgba(255,255,255,0.12); color: var(--ink-soft); }
+.grat-list .ans { min-width: 0; font-size: 1rem; line-height: 1.35; }
+.grat-list li.current { border-color: rgba(255,226,184,0.6); }
+.grat-list li.current .ans { color: var(--ink-soft); font-style: italic; }
+.grat-list li.filled { border-style: solid; border-color: transparent; background: rgba(255,255,255,0.10); color: var(--ink); }
+.grat-list li.filled .num { background: var(--said); color: var(--sky-top); }
+.grat-type { display: flex; gap: 8px; }
+.grat-type input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: rgba(0,0,0,0.18);
+  border: 1px solid var(--glass-line); border-radius: 999px; padding: 12px 18px; }
+.grat-type input::placeholder { color: var(--ink-faint); }
+.recap { text-align: left; display: flex; flex-direction: column; gap: 8px; margin-top: 6px;
+  padding: 16px 18px; border-radius: 16px; background: rgba(255,255,255,0.08); }
+.recap ul { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 4px; color: var(--ink); }
+
 .done { text-align: center; gap: 14px; }
 .done h2 { font-family: var(--display); font-weight: 400; font-size: 1.9rem; margin: 0; }
 .done p { margin: 0; color: var(--ink-soft); }
@@ -186,7 +208,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   </header>
 
   <section class="card" id="sayCard">
-    <p class="label">Say this out loud</p>
+    <p class="label">Step 1 · Say this out loud</p>
     <p class="affirmation" id="affirmation" aria-live="polite"></p>
     <p class="heard" id="heard"></p>
     <div class="row">
@@ -197,7 +219,30 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     <button class="quiet" id="manualBtn" type="button" hidden>I said it out loud</button>
   </section>
 
-  <section class="swipe locked" id="swipe">
+  <section class="card" id="gratCard" hidden>
+    <p class="label">Step 2 · Gratitude</p>
+    <p class="question" id="gratQ"></p>
+    <ol class="grat-list" id="gratList">
+      <li><span class="num">1</span><span class="ans"></span></li>
+      <li><span class="num">2</span><span class="ans"></span></li>
+      <li><span class="num">3</span><span class="ans"></span></li>
+    </ol>
+    <div class="row" id="gratControls">
+      <button class="primary" id="gratMic" type="button"><span class="mic-dot"></span><span id="gratMicLabel">Tap and say #1</span></button>
+      <button class="quiet" id="gratOther" type="button">Different question</button>
+    </div>
+    <form class="grat-type" id="gratForm" hidden>
+      <input id="gratInput" type="text" autocomplete="off" placeholder="Type answer #1" aria-label="Type your answer">
+      <button type="submit">Add</button>
+    </form>
+    <div class="row">
+      <button class="quiet" id="gratTypeBtn" type="button">Type instead</button>
+      <button class="quiet" id="gratUndo" type="button" hidden>Redo last one</button>
+    </div>
+    <p class="status" id="gratStatus" role="status"></p>
+  </section>
+
+  <section class="swipe locked" id="swipe" hidden>
     <div class="track" id="track">
       <span>← 5 more minutes</span>
       <span class="right">Start my day →</span>
@@ -209,6 +254,10 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   <section class="card done" id="doneCard" hidden>
     <h2 class="big">Don't scroll.<br>Start your day.</h2>
     <p id="doneText">Take a slow breath. One small thing at a time today.</p>
+    <div class="recap" id="gratRecap" hidden>
+      <p class="label" id="gratRecapQ"></p>
+      <ul id="gratRecapList"></ul>
+    </div>
     <p class="label settle">Mind still buzzing? Settle it for a minute</p>
     <div class="choices">
       <button type="button" class="choice" id="slimeBtn"><span class="swatch slime-swatch" aria-hidden="true"></span>Play with slime</button>
@@ -314,7 +363,8 @@ footer { margin-top: auto; display: flex; justify-content: center; }
 
   const norm = (s) => s.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
   let targetWords = [];
-  let unlocked = false;
+  let unlocked = false;      // swipe is unlocked
+  let affirmDone = false;    // affirmation has been said
 
   function showAffirmation() {
     const text = AFFIRMATIONS[idx];
@@ -361,17 +411,24 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     s.classList.toggle("ok", !!ok);
   }
 
+  // affirmation said -> gratitude step -> swipe unlocks
   function unlock() {
-    if (unlocked) return;
-    unlocked = true;
+    if (affirmDone) return;
+    affirmDone = true;
     document.body.classList.add("ready");
-    $("swipe").classList.remove("locked");
-    $("swipeHint").textContent = "Swipe when you're ready";
     setStatus("Beautifully said.", true);
     $("micBtn").hidden = true;
     $("otherBtn").hidden = true;
     $("manualBtn").hidden = true;
+    $("swipeHint").textContent = "Answer today's gratitude to unlock";
     playChime(0.5);
+    setTimeout(showGratitude, 1400);
+  }
+  function unlockSwipe() {
+    if (unlocked) return;
+    unlocked = true;
+    $("swipe").classList.remove("locked");
+    $("swipeHint").textContent = "Swipe when you're ready";
   }
 
   // Speech recognition
@@ -417,7 +474,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
       listening = false;
       $("micBtn").classList.remove("listening");
       $("micLabel").textContent = "Tap and say it";
-      if (!unlocked && best > 0 && best < 0.8) {
+      if (!affirmDone && best > 0 && best < 0.8) {
         setStatus("Almost. Say the whole line once more.");
         $("manualBtn").hidden = false;
       }
@@ -475,7 +532,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     else setThumb(0);
   }
   thumb.addEventListener("pointerdown", (e) => {
-    if (!unlocked) { $("swipeHint").textContent = "Say your affirmation first"; return; }
+    if (!unlocked) { $("swipeHint").textContent = affirmDone ? "Say your three things first" : "Say your affirmation first"; return; }
     dragging = true; startX = e.clientX - dx; thumb.classList.remove("snap");
     try { thumb.setPointerCapture(e.pointerId); } catch (err) {}
   });
@@ -497,14 +554,16 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   function startDay() {
     clearInterval(snoozeTimer);
     bumpStreak();
-    $("sayCard").hidden = true; $("swipe").hidden = true; $("snoozeCard").hidden = true;
+    $("sayCard").hidden = true; $("gratCard").hidden = true; $("swipe").hidden = true; $("snoozeCard").hidden = true;
     $("doneText").textContent = CLOSERS[dayNum % CLOSERS.length];
+    showRecap();
     $("doneCard").hidden = false;
+    window.scrollTo(0, 0);
   }
 
   let snoozeTimer = null, wakeLock = null;
   async function snooze() {
-    $("sayCard").hidden = true; $("swipe").hidden = true;
+    $("sayCard").hidden = true; $("gratCard").hidden = true; $("swipe").hidden = true;
     $("snoozeCard").hidden = false;
     try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
     const end = Date.now() + 5 * 60 * 1000;
@@ -516,7 +575,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
         clearInterval(snoozeTimer);
         playChime(1); setTimeout(() => playChime(1), 3000);
         $("snoozeCard").hidden = true; $("swipe").hidden = false;
-        $("sayCard").hidden = false;
+        $("sayCard").hidden = gratShown; $("gratCard").hidden = !gratShown;
         thumb.classList.add("snap"); setThumb(0);
         if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
       }
@@ -526,9 +585,118 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   }
   $("wakeNowBtn").addEventListener("click", () => {
     clearInterval(snoozeTimer);
-    $("snoozeCard").hidden = true; $("sayCard").hidden = false; $("swipe").hidden = false;
+    $("snoozeCard").hidden = true; $("sayCard").hidden = gratShown; $("gratCard").hidden = !gratShown; $("swipe").hidden = false;
     thumb.classList.add("snap"); setThumb(0);
   });
+
+
+  // ---------- Gratitude: say three things ----------
+  const QUESTIONS = [
+    "What are three things you're grateful for today?",
+    "What are three traits that describe you at your best?",
+    "Who are three people you're thankful for?",
+    "What are three small things that made you smile lately?",
+    "What are three things you're looking forward to?",
+    "What are three things your body lets you do?",
+    "What are three things you love about your home?",
+    "What are three wins from this week, big or small?",
+    "What are three things you'd miss if they were gone?",
+    "What are three things you're proud of yourself for?"
+  ];
+  const lastQ = store.get("lastQuestion", -1);
+  let qIdx = Math.floor(Math.random() * (QUESTIONS.length - 1));
+  if (qIdx >= lastQ && lastQ >= 0) qIdx++;
+  let answers = [], gratShown = false, gRec = null, gListening = false;
+
+  function capFirst(t) { t = t.trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
+  function gratStatus(msg, ok) { const s = $("gratStatus"); s.textContent = msg; s.classList.toggle("ok", !!ok); }
+  function renderGrat(preview) {
+    $("gratQ").textContent = QUESTIONS[qIdx];
+    [...$("gratList").children].forEach((li, i) => {
+      const filled = i < answers.length, current = i === answers.length;
+      li.classList.toggle("filled", filled);
+      li.classList.toggle("current", current);
+      li.querySelector(".ans").textContent = filled ? answers[i] : (current && preview ? preview : "");
+    });
+    const n = answers.length + 1;
+    $("gratMicLabel").textContent = gListening ? "Listening…" : "Tap and say #" + n;
+    $("gratInput").placeholder = "Type answer #" + n;
+    $("gratOther").hidden = answers.length > 0;
+    $("gratUndo").hidden = answers.length === 0 || answers.length === 3;
+  }
+  function showGratitude() {
+    gratShown = true;
+    store.set("lastQuestion", qIdx);
+    $("sayCard").hidden = true;
+    window.scrollTo(0, 0);
+    $("gratCard").hidden = false;
+    if (!SR) { $("gratControls").hidden = true; $("gratForm").hidden = false; $("gratTypeBtn").hidden = true; }
+    renderGrat();
+  }
+  function addAnswer(text) {
+    if (answers.length >= 3 || text.trim().length < 2) return;
+    answers.push(capFirst(text));
+    renderGrat();
+    if (answers.length === 3) finishGratitude();
+    else gratStatus(["Lovely.", "One more."][answers.length - 1]);
+  }
+  function finishGratitude() {
+    $("gratControls").hidden = true; $("gratForm").hidden = true; $("gratTypeBtn").hidden = true; $("gratUndo").hidden = true;
+    gratStatus("Thank you. That's a beautiful way to start.", true);
+    const log = store.get("gratitude", []);
+    log.push({ date: todayKey, question: QUESTIONS[qIdx], answers: answers.slice() });
+    store.set("gratitude", log.slice(-60));
+    playChime(0.5);
+    unlockSwipe();
+    $("swipe").hidden = false;
+    setTimeout(() => $("swipe").scrollIntoView({ behavior: "smooth", block: "center" }), 400);
+  }
+  function showRecap() {
+    if (answers.length < 3) return;
+    $("gratRecapQ").textContent = QUESTIONS[qIdx];
+    const ul = $("gratRecapList"); ul.innerHTML = "";
+    answers.forEach((a) => { const li = document.createElement("li"); li.textContent = a; ul.appendChild(li); });
+    $("gratRecap").hidden = false;
+  }
+
+  function gratListen() {
+    if (!SR || gListening || answers.length >= 3) return;
+    gRec = new SR();
+    gRec.lang = "en-US";
+    gRec.interimResults = true;
+    gRec.continuous = false;
+    let heard = "";
+    gRec.onresult = (e) => {
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + " ";
+      heard = t.trim();
+      renderGrat(heard);
+    };
+    gRec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        gratStatus("Microphone access is off. You can type your answers instead.");
+        $("gratForm").hidden = false;
+      } else if (e.error === "no-speech") gratStatus("I didn't hear anything. Tap and try again.");
+      else gratStatus("Something interrupted listening. Tap and try again.");
+    };
+    gRec.onend = () => {
+      gListening = false;
+      $("gratMic").classList.remove("listening");
+      if (heard.length >= 2) addAnswer(heard); else renderGrat();
+    };
+    try {
+      gRec.start();
+      gListening = true;
+      $("gratMic").classList.add("listening");
+      gratStatus("");
+      renderGrat();
+    } catch (err) { gratStatus("Couldn't start the microphone. Tap and try again."); }
+  }
+  $("gratMic").addEventListener("click", () => { if (gListening) { try { gRec.stop(); } catch (e) {} } else gratListen(); });
+  $("gratOther").addEventListener("click", () => { qIdx = (qIdx + 1) % QUESTIONS.length; store.set("lastQuestion", qIdx); renderGrat(); });
+  $("gratTypeBtn").addEventListener("click", () => { $("gratForm").hidden = false; $("gratTypeBtn").hidden = true; $("gratInput").focus(); });
+  $("gratUndo").addEventListener("click", () => { answers.pop(); gratStatus(""); renderGrat(); });
+  $("gratForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gratInput").value; $("gratInput").value = ""; addAnswer(v); });
 
   // ---------- Settle: slime and bubble wrap ----------
   function openPlay(id) {
