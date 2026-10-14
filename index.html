@@ -85,6 +85,11 @@ body.ready .affirmation .w { color: var(--said); }
 body.ready #closeLine .w { color: var(--ink-faint); }
 body.ready #closeLine .w.said { color: var(--said); }
 #closeCard, #byeCard { animation: rise 0.6s ease both; }
+.scratch { position: relative; min-height: 170px; border-radius: 20px; overflow: hidden; display: grid; place-items: center;
+  padding: 26px 22px; background: rgba(255,255,255,0.10); border: 1px solid var(--glass-line); }
+.quote { font-family: var(--display); font-size: clamp(1.3rem, 5.4vw, 1.6rem); line-height: 1.35; margin: 0; text-wrap: balance; color: var(--said); }
+#scratchCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; transition: opacity 0.7s ease; }
+.scratch.revealed #scratchCanvas { opacity: 0; pointer-events: none; }
 
 .heard { min-height: 1.4em; color: var(--ink-soft); font-size: 0.95rem; margin: 0; font-style: italic; }
 
@@ -297,7 +302,13 @@ footer { margin-top: auto; display: flex; justify-content: center; }
 
   <section class="card done" id="byeCard" hidden>
     <h2 class="big">Have a great day.</h2>
-    <p>You're ready. See you tomorrow morning.</p>
+    <p class="label">Your quote for today</p>
+    <div class="scratch" id="scratch">
+      <p class="quote" id="quoteText"></p>
+      <canvas id="scratchCanvas" aria-label="Scratch card. Swipe to reveal your quote for today."></canvas>
+    </div>
+    <p class="hint" id="scratchHint">Swipe across the card to scratch it</p>
+    <p id="byeText" hidden>You're ready. See you tomorrow morning.</p>
   </section>
 
   <section class="card done" id="snoozeCard" hidden>
@@ -764,7 +775,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     closeStatusMsg("Beautifully said.", true);
     $("closeMic").hidden = true; $("closeManual").hidden = true;
     playChime(0.7);
-    setTimeout(() => { $("closeCard").hidden = true; $("byeCard").hidden = false; window.scrollTo(0, 0); }, 1800);
+    setTimeout(() => { $("closeCard").hidden = true; $("byeCard").hidden = false; window.scrollTo(0, 0); initScratch(); }, 1800);
   }
   function closeListen() {
     if (!SR || cListening || closeDone) return;
@@ -804,6 +815,85 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   }
   $("closeMic").addEventListener("click", () => { if (cListening) { try { cRec.stop(); } catch (e) {} } else closeListen(); });
   $("closeManual").addEventListener("click", finishClosing);
+
+  // ---------- Scratch card: your positive quote for today ----------
+  const QUOTES = [
+    "Small steps every day add up to something big.",
+    "You are allowed to take today slowly.",
+    "Something good is already on its way to you.",
+    "You have handled every hard day so far. You can handle this one.",
+    "Your calm is your superpower today.",
+    "Progress, not perfection.",
+    "Be proud of how far you've come.",
+    "Today is a fresh page. Write something kind on it.",
+    "You don't have to do it all. Just the next right thing.",
+    "Breathe in courage, breathe out worry.",
+    "Kindness to yourself counts too.",
+    "You bring something special to every room you walk into.",
+    "Good things grow when you're patient with yourself.",
+    "One small win today is still a win.",
+    "You are enough, exactly as you are this morning.",
+    "Let today surprise you in the best way.",
+    "Your energy is precious. Spend it on what matters.",
+    "The sun came up for you today. Shine back.",
+    "You are doing better than you think.",
+    "Start small. Smile often. Keep going."
+  ];
+  let scratchReady = false, scratched = false;
+  function initScratch() {
+    if (scratchReady) return;
+    scratchReady = true;
+    $("quoteText").textContent = QUOTES[dayNum % QUOTES.length];
+    const cv = $("scratchCanvas"), box = $("scratch");
+    const dpr = window.devicePixelRatio || 1;
+    const w = box.clientWidth, h = box.clientHeight;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const g = cv.getContext("2d");
+    g.scale(dpr, dpr);
+    // golden coating with a little sparkle
+    const grad = g.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, "#ffe2b8"); grad.addColorStop(0.5, "#f3c89b"); grad.addColorStop(1, "#d9a08f");
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) {
+      g.fillStyle = "rgba(255,255,255," + (0.25 + Math.random() * 0.45) + ")";
+      g.beginPath(); g.arc(Math.random() * w, Math.random() * h, Math.random() * 1.8 + 0.4, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = "#1d2340";
+    g.font = "600 18px Figtree, -apple-system, sans-serif";
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText("Scratch to reveal \u2726", w / 2, h / 2);
+    // scratching
+    g.globalCompositeOperation = "destination-out";
+    g.lineCap = "round"; g.lineJoin = "round"; g.lineWidth = 40;
+    let down = false, last = null, moves = 0;
+    const pt = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const scratchTo = (p) => {
+      g.beginPath();
+      if (last) { g.moveTo(last.x, last.y); g.lineTo(p.x, p.y); g.stroke(); }
+      else { g.arc(p.x, p.y, 20, 0, Math.PI * 2); g.fill(); }
+      last = p;
+      if (++moves % 8 === 0) checkReveal();
+    };
+    cv.addEventListener("pointerdown", (e) => { down = true; last = null; try { cv.setPointerCapture(e.pointerId); } catch (err) {} scratchTo(pt(e)); $("scratchHint").textContent = "Keep going…"; });
+    cv.addEventListener("pointermove", (e) => { if (down) scratchTo(pt(e)); });
+    const up = () => { if (down) { down = false; last = null; checkReveal(); } };
+    cv.addEventListener("pointerup", up);
+    cv.addEventListener("pointercancel", up);
+    function checkReveal() {
+      if (scratched) return;
+      const data = g.getImageData(0, 0, cv.width, cv.height).data;
+      let clear = 0, total = 0;
+      for (let i = 3; i < data.length; i += 4 * 24) { total++; if (data[i] < 40) clear++; }
+      if (clear / total > 0.65) reveal();
+    }
+    function reveal() {
+      scratched = true;
+      box.classList.add("revealed");
+      $("scratchHint").hidden = true;
+      $("byeText").hidden = false;
+      playChime(0.6);
+    }
+  }
   $("slimeBtn").addEventListener("click", () => openPlay("slimeCard"));
   $("wrapBtn").addEventListener("click", () => openPlay("wrapCard"));
   document.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", closePlay));
