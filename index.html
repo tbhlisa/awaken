@@ -252,12 +252,8 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   </section>
 
   <section class="card done" id="doneCard" hidden>
-    <h2 class="big">Don't scroll.<br>Start your day.</h2>
+    <h2 class="big">Don't doomscroll.</h2>
     <p id="doneText">Take a slow breath. One small thing at a time today.</p>
-    <div class="recap" id="gratRecap" hidden>
-      <p class="label" id="gratRecapQ"></p>
-      <ul id="gratRecapList"></ul>
-    </div>
     <p class="label settle">Mind still buzzing? Settle it for a minute</p>
     <div class="choices">
       <button type="button" class="choice" id="slimeBtn"><span class="swatch slime-swatch" aria-hidden="true"></span>Play with slime</button>
@@ -555,8 +551,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     clearInterval(snoozeTimer);
     bumpStreak();
     $("sayCard").hidden = true; $("gratCard").hidden = true; $("swipe").hidden = true; $("snoozeCard").hidden = true;
-    $("doneText").textContent = CLOSERS[dayNum % CLOSERS.length];
-    showRecap();
+    $("doneText").textContent = "Take a slow breath. One small thing at a time today.";
     $("doneCard").hidden = false;
     window.scrollTo(0, 0);
   }
@@ -659,14 +654,6 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     $("swipe").hidden = false;
     setTimeout(() => $("swipe").scrollIntoView({ behavior: "smooth", block: "center" }), 400);
   }
-  function showRecap() {
-    if (answers.length < 3) return;
-    $("gratRecapQ").textContent = QUESTIONS[qIdx];
-    const ul = $("gratRecapList"); ul.innerHTML = "";
-    answers.forEach((a) => { const li = document.createElement("li"); li.textContent = a; ul.appendChild(li); });
-    $("gratRecap").hidden = false;
-  }
-
   function gratListen(auto) {
     if (!SR || gListening || answers.length >= 3) return;
     gRec = new SR();
