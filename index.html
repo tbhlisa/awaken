@@ -82,9 +82,7 @@ header { display: flex; justify-content: space-between; align-items: baseline; g
 .affirmation .w { color: var(--ink-faint); transition: color 0.35s ease; }
 .affirmation .w.said { color: var(--said); }
 body.ready .affirmation .w { color: var(--said); }
-body.ready #closeLine .w { color: var(--ink-faint); }
-body.ready #closeLine .w.said { color: var(--said); }
-#closeCard, #byeCard { animation: rise 0.6s ease both; }
+#byeCard { animation: rise 0.6s ease both; }
 .scratch { position: relative; min-height: 170px; border-radius: 20px; overflow: hidden; display: grid; place-items: center;
   padding: 26px 22px; background: rgba(255,255,255,0.10); border: 1px solid var(--glass-line); }
 .quote { font-family: var(--display); font-size: clamp(1.3rem, 5.4vw, 1.6rem); line-height: 1.35; margin: 0; text-wrap: balance; color: var(--said); }
@@ -267,6 +265,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
       <button type="button" class="choice" id="slimeBtn"><span class="swatch slime-swatch" aria-hidden="true"></span>Play with slime</button>
       <button type="button" class="choice" id="wrapBtn"><span class="swatch wrap-swatch" aria-hidden="true"></span>Pop bubble wrap</button>
     </div>
+    <button type="button" class="quiet center" id="skipQuote">Skip to my quote for today</button>
   </section>
 
   <section class="card play" id="slimeCard" hidden>
@@ -287,17 +286,6 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     <div class="wrap" id="wrap" role="group" aria-label="Bubble wrap"></div>
     <button type="button" class="quiet center" id="wrapNew" hidden>New sheet</button>
     <button type="button" class="primary center" data-back>I'm ready to go</button>
-  </section>
-
-  <section class="card" id="closeCard" hidden>
-    <p class="label">One last thing · say it out loud</p>
-    <p class="affirmation" id="closeLine" aria-live="polite"></p>
-    <p class="heard" id="closeHeard"></p>
-    <div class="row">
-      <button class="primary" id="closeMic" type="button"><span class="mic-dot"></span><span id="closeMicLabel">Tap and say it</span></button>
-    </div>
-    <p class="status" id="closeStatus" role="status"></p>
-    <button class="quiet" id="closeManual" type="button" hidden>I said it out loud</button>
   </section>
 
   <section class="card done" id="byeCard" hidden>
@@ -437,7 +425,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     s.classList.toggle("ok", !!ok);
   }
 
-  // affirmation said -> gratitude step -> swipe unlocks
+  // affirmation said -> chime -> swipe unlocks; you swipe to go to gratitude
   function unlock() {
     if (affirmDone) return;
     affirmDone = true;
@@ -446,15 +434,18 @@ footer { margin-top: auto; display: flex; justify-content: center; }
     $("micBtn").hidden = true;
     $("otherBtn").hidden = true;
     $("manualBtn").hidden = true;
-    $("swipeHint").textContent = "Answer today's gratitude to unlock";
     playChime(0.5);
-    setTimeout(showGratitude, 1400);
+    unlockSwipe();
   }
   function unlockSwipe() {
-    if (unlocked) return;
     unlocked = true;
     $("swipe").classList.remove("locked");
     $("swipeHint").textContent = "Swipe when you're ready";
+  }
+  // affirmation page -> gratitude page -> "Don't doomscroll" page
+  function nextStep() {
+    if (!gratShown) showGratitude();
+    else startDay();
   }
 
   // Speech recognition
@@ -553,7 +544,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   function release() {
     const m = maxTravel();
     thumb.classList.add("snap");
-    if (dx > m * 0.75) { setThumb(m); setTimeout(startDay, 250); }
+    if (dx > m * 0.75) { setThumb(m); setTimeout(nextStep, 250); }
     else if (dx < -m * 0.75) { setThumb(-m); setTimeout(snooze, 250); }
     else setThumb(0);
   }
@@ -567,7 +558,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   thumb.addEventListener("pointercancel", () => { dragging = false; thumb.classList.add("snap"); setThumb(0); });
   thumb.addEventListener("keydown", (e) => {
     if (!unlocked) return;
-    if (e.key === "ArrowRight") { thumb.classList.add("snap"); setThumb(maxTravel()); setTimeout(startDay, 250); }
+    if (e.key === "ArrowRight") { thumb.classList.add("snap"); setThumb(maxTravel()); setTimeout(nextStep, 250); }
     if (e.key === "ArrowLeft") { thumb.classList.add("snap"); setThumb(-maxTravel()); setTimeout(snooze, 250); }
   });
 
@@ -652,6 +643,9 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   function showGratitude() {
     gratShown = true;
     store.set("lastQuestion", qIdx);
+    thumb.classList.remove("snap"); setThumb(0);   // re-centre while the bar is still visible
+    unlocked = false;
+    $("swipe").classList.add("locked");
     $("sayCard").hidden = true;
     $("swipe").hidden = true;
     window.scrollTo(0, 0);
@@ -740,81 +734,14 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   function closePlay() {
     $("slimeCard").hidden = true; $("wrapCard").hidden = true;
     stopSlime();
-    showClosing();
+    showQuote();
   }
-
-  // ---------- Closing affirmation: "I'm going to have a great day." ----------
-  const CLOSING = "I'm going to have a great day.";
-  const closeWords = norm(CLOSING);
-  let closeDone = false, cRec = null, cListening = false;
-  (function buildClosing() {
-    const el = $("closeLine");
-    CLOSING.split(" ").forEach((w, i, a) => {
-      const span = document.createElement("span"); span.className = "w"; span.textContent = w; el.appendChild(span);
-      if (i < a.length - 1) el.appendChild(document.createTextNode(" "));
-    });
-  })();
-  function showClosing() {
+  function showQuote() {
     $("doneCard").hidden = true;
-    $("closeCard").hidden = false;
+    $("byeCard").hidden = false;
     window.scrollTo(0, 0);
-    if (!SR) { $("closeMic").disabled = true; $("closeMic").style.opacity = 0.5; $("closeManual").hidden = false; closeStatusMsg("Say it out loud, then tap below."); }
+    initScratch();
   }
-  function closeStatusMsg(msg, ok) { const s = $("closeStatus"); s.textContent = msg; s.classList.toggle("ok", !!ok); }
-  function scoreClosing(text) {
-    // accept how people actually say it: "gonna" = "going to", "I am" = "I'm"
-    const heard = norm(text.replace(/\bgonna\b/gi, "going to").replace(/\bi am\b/gi, "I'm"));
-    const matched = closeWords.map((w) => heard.some((hw) => wordsClose(w, hw)));
-    $("closeLine").querySelectorAll(".w").forEach((s, i) => s.classList.toggle("said", !!matched[i]));
-    return matched.filter(Boolean).length / closeWords.length;
-  }
-  function finishClosing() {
-    if (closeDone) return;
-    closeDone = true;
-    $("closeLine").querySelectorAll(".w").forEach((s) => s.classList.add("said"));
-    closeStatusMsg("Beautifully said.", true);
-    $("closeMic").hidden = true; $("closeManual").hidden = true;
-    playChime(0.7);
-    setTimeout(() => { $("closeCard").hidden = true; $("byeCard").hidden = false; window.scrollTo(0, 0); initScratch(); }, 1800);
-  }
-  function closeListen() {
-    if (!SR || cListening || closeDone) return;
-    cRec = new SR();
-    cRec.lang = "en-US";
-    cRec.interimResults = true;
-    cRec.continuous = false;
-    cRec.maxAlternatives = 3;
-    let best = 0;
-    cRec.onresult = (e) => {
-      let text = "";
-      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript + " ";
-      $("closeHeard").textContent = "“" + text.trim() + "”";
-      best = Math.max(best, scoreClosing(text));
-      if (best >= 0.75) { try { cRec.stop(); } catch (err) {} finishClosing(); }
-    };
-    cRec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        closeStatusMsg("Microphone access is off. Say it out loud, then tap below.");
-        $("closeManual").hidden = false;
-      } else if (e.error === "no-speech") closeStatusMsg("I didn't hear anything. Tap and try again.");
-      else closeStatusMsg("Something interrupted listening. Tap and try again.");
-    };
-    cRec.onend = () => {
-      cListening = false;
-      $("closeMic").classList.remove("listening");
-      $("closeMicLabel").textContent = "Tap and say it";
-      if (!closeDone && best > 0 && best < 0.75) { closeStatusMsg("Almost. Say the whole line once more."); $("closeManual").hidden = false; }
-    };
-    try {
-      cRec.start();
-      cListening = true;
-      $("closeMic").classList.add("listening");
-      $("closeMicLabel").textContent = "Listening…";
-      closeStatusMsg("");
-    } catch (err) { closeStatusMsg("Couldn't start the microphone. Tap and try again."); }
-  }
-  $("closeMic").addEventListener("click", () => { if (cListening) { try { cRec.stop(); } catch (e) {} } else closeListen(); });
-  $("closeManual").addEventListener("click", finishClosing);
 
   // ---------- Scratch card: your positive quote for today ----------
   const QUOTES = [
@@ -897,6 +824,7 @@ footer { margin-top: auto; display: flex; justify-content: center; }
   $("slimeBtn").addEventListener("click", () => openPlay("slimeCard"));
   $("wrapBtn").addEventListener("click", () => openPlay("wrapCard"));
   document.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", closePlay));
+  $("skipQuote").addEventListener("click", showQuote);
 
   // Slime: a soft ring of points that springs back after you press or stretch it
   const SLIME_COLOURS = [
